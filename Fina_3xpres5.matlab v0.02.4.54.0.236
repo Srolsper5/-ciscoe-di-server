@@ -1,0 +1,223 @@
+name: CI & Basic SAST
+
+on:
+  push:
+    tags: [ 'FINA_3XPR', '*' ]
+  pull_request:
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install & Build
+        run: |
+          cd src/examples/frontend-react-tsx
+          npm ci
+          npm run build
+      - name: Run npm audit
+        run: |
+          cd src/examples/frontend-react-tsx
+          npm audit --audit-level=high || echo "audit issues found"
+
+  kotlin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Build Kotlin (Gradle)
+        run: |
+          cd src/examples/backend-kotlin
+          ./gradlew build --no-daemon
+      - name: SpotBugs (example)
+        run: |
+          echo "Run SpotBugs or other SAST tools here (requires plugin setup)"
+
+  java:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Build Java (Maven)
+        run: |
+          cd src/examples/backend-java
+          mvn -B package
+      - name: SpotBugs / SAST
+        run: |
+          echo "Run SpotBugs/OWASP/Spot for Java here (requires Maven plugin configuration)"
+
+  bundle:
+    runs-on: ubuntu-latest
+    needs: [frontend, kotlin, java]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create release ZIP
+        run: |
+          zip -r FINA_3XPRES5.zip . -x "**/.git/**" -x "**/node_modules/**" -x "**/.gradle/**" -x "**/build/**"
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FINA_3XPRES5
+          path: FINA_3XPRES5.zip
+# Open Banking & PSD2 Compliance Mapping (PSD2 + Open Banking UK + FDX)
+
+Scope:
+- This document maps the ciscoe-di-server E911/DAS deployment controls to relevant Open Banking / PSD2 / FDX requirements; main topics:
+  - OAuth2 / OIDC for delegated consent
+  - Strong Customer Authentication (SCA) where applicable
+  - Consent scopes & limited data access
+  - Audit trails, non-repudiation, logging, tamper evidence
+  - mTLS / mutual TLS for API-to-API backhaul
+  - Encryption in transit & at rest, key lifecycle
+  - Role-based Access Control (RBAC) and least privilege
+  - Incident response, breach notification (timelines per PSD2/OBIE)
+  - Data minimization & retention policy
+
+Mapping summary
+- PSD2 (AIS/PIS) — Consent model: ensure explicit consent, auditable logs, revocation endpoints.
+- Open Banking UK (OBIE) — Use standardized endpoints and data models; enforce strong client registration and mTLS for backend clients.
+- FDX / US — Focus on consumer-directed sharing, OAuth2 flows & security recommendations; align logging and consent expirations.
+
+Recommendations
+- Use OAuth2 Authorization Code + PKCE (for frontends) and client credentials for server-to-server.
+- Use an Authorization Server (AuthZ) supporting introspection, revocation, and JWKs.
+- Use mTLS for critical backhaul API calls (edge → MEC → carrier).
+- Detailed checklist included below for developers and auditors.
+
+(Full checklist and mapping included in the # Blueprint & Architecture — Annotated Overview
+
+This document annotates the E911 Cellular DAS + Small Cell architectural blueprint for the typical floor plan (grid A–G × 1–5) and includes the following sections:
+- Floor plan (typical level) legend:
+  - DAS Antenna (symbol)
+  - Small Cell (symbol)
+  - PoE Switch (symbol)
+  - IDF closet location(s)
+  - POE / Fiber patch panels
+- Building perspective (isometric) callouts:
+  - Rooftop: backhaul antennas (fiber/microwave/satellite), GPS timing
+  - DAS headend room: core routers, MEC servers, BBU pool, DAS headend
+  - Fiber risers: PRIMARY/SECONDARY with color-coded cable traces (fiber, coax, ethernet, power)
+  - Power room: battery input, power shelf
+- Equipment rack elevation (labeled):
+  - Core Router
+  - MEC Server
+  - BBU Pool
+  - DAS Headend
+  - PoE Switch (A/B)
+  - Fiber Patch Panel
+  - Power Shelf
+  - Battery Input
+- IDF closet (enlarged):
+  - POE switch, fiber patch panel, RRUs/small cell connectors, cable tray, power shelf
+- Antenna detail (side & bottom views) with dimensions and mounting brackets (ceiling mount, wall mount)
+- Power one-line diagram (simplified): Utility → ATS → UPS → Generator → PDU → Critical / Non-Critical Loads
+- RF Coverage Heatmap (5G NR example): RSRP scale from −65 dBm (strong/red) to −115 dBm (weak/blue)
+- Disaster resilience strategy: Primary (fiber) → Failover (microwave) → Last resort (satellite), automatic failover < 5 seconds
+- Network architecture diagram: User devices → DAS / Small Cells → Edge / MEC Node → Backhaul (fiber/microwave/satellite) → Carrier Core (EPC) → PSAP / NG911
+
+Floor grid: A..G horizontally, 1..5 vertically (use these coordinates in the plan views).
+{
+  "name": "ciscoe-di-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "lint": "eslint 'src/**/*.{ts,tsx}' --max-warnings=0",
+    "sast": "npm audit --audit-level=high || true"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "axios": "^1.5.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.2.0",
+    "eslint": "^8.50.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "import React from "react";
+import axios from "axios";
+
+export default function App(): JSX.Element {
+  const [token, setToken] = React.useState<string | null>(null);
+
+  async function callProtected() {
+    const resp = await axios.get("/api/protected", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    alert("Response: " + JSON.stringify(resp.data));
+  }
+
+  return (
+    <div style={{ padding: 24 }}>
+      <h1>ciscoe-di-server — Demo Frontend</h1>
+      <p>Demo consent UI & protected API call (Open Banking style)</p>
+      <label>Access token (paste for demo)</label>
+      <input onChange={(e) => setToken(e.target.value)} style={{ width: "100%" }} />
+      <button onClick={callProtected} disabled={!token}>Call Protected API</button>
+    </div>
+  );
+}
+name=src/examples/backend-kotlin/README.md
+Kotlin Spring Boot example
+- Uses Spring Security to check Authorization Bearer token (placeholder)
+- Build: ./gradlew bootJar
+- Run: ./gradlew bootRun
+- NOTE: This is a minimal skeleton for demo only. Swap in real token introspection / Keycloak.
+package com.example
+
+import org.springframework.boot.autoconfigure.SpringBootApplication
+import org.springframework.boot.runApplication
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.RequestHeader
+import org.springframework.web.bind.annotation.RestController
+
+@SpringBootApplication
+class Application
+
+fun main(args: Array<String>) {
+    runApplication<Application>(*args)
+}
+
+@RestController
+class DemoController {
+    @GetMapping("/api/protected")
+    fun protected(@RequestHeader("Authorization") auth: String?): Map<String, String> {
+        // Placeholder: validate token via introspection / JWKs
+        if (auth == null) throw RuntimeException("401")
+        return mapOf("status" to "ok", "token" to auth.take(50))
+    }
+}
+name=src/examples/backend-java/README.md
+Java Spring Boot example
+- Build: mvn package
+- Run: mvn spring-boot:run
+- NOTE: Replace token validation with your introspection endpoint / JWKs
+package com.example;
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RestController;
+import java.util.Map;
+
+@RestController
+public class DemoController {
+    @GetMapping("/api/protected")
+    public Map<String,String> protectedEndpoint(@RequestHeader(value="Authorization", required=false) String auth) {
+        if (auth == null) throw new RuntimeException("401");
+        return Map.of("status","ok","token", auth.substring(0, Math.min(auth.length(), 50)));
+    }
+}
+
